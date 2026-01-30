@@ -1,0 +1,63 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: event_managment_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Application (Development)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      DATABASE_URL: ecto://postgres:postgres@db/event_managment_dev
+      SECRET_KEY_BASE: dev-secret-key-base-that-is-at-least-64-bytes-long-for-development
+      PHX_HOST: localhost
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - deps:/app/deps
+      - build:/app/_build
+    command: mix phx.server
+
+  # Application (Production)
+  app_prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: ecto://postgres:postgres@db/event_managment_prod
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-generate-a-secret-key-using-mix-phx-gen-secret}
+      PHX_HOST: localhost
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - prod
+
+volumes:
+  postgres_data:
+  deps:
+  build:
