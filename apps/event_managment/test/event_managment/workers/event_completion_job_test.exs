@@ -48,5 +48,23 @@ defmodule EventManagment.Workers.EventCompletionJobTest do
       {:ok, job} = EventCompletionJob.new(%{}) |> Oban.insert()
       assert job.max_attempts == 3
     end
+
+    test "is scheduled via Oban cron at midnight daily" do
+      config = Application.get_env(:event_managment, Oban)
+      cron_plugin = Enum.find(config[:plugins], fn
+        {Oban.Plugins.Cron, _} -> true
+        _ -> false
+      end)
+
+      assert cron_plugin != nil
+      {Oban.Plugins.Cron, cron_opts} = cron_plugin
+
+      job_entry = Enum.find(cron_opts[:crontab], fn {_schedule, worker} ->
+        worker == EventCompletionJob
+      end)
+
+      assert job_entry != nil
+      assert {"0 0 * * *", EventCompletionJob} = job_entry
+    end
   end
 end

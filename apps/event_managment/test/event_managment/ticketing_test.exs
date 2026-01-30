@@ -6,6 +6,7 @@ defmodule EventManagment.TicketingTest do
   alias EventManagment.Ticketing.Order
   alias EventManagment.Events
   alias EventManagment.Notifications.EmailService
+  alias EventManagment.Payments.Gateway
 
   describe "purchase_tickets/2" do
     test "creates an order and decrements tickets" do
@@ -21,11 +22,16 @@ defmodule EventManagment.TicketingTest do
       assert order.customer_email == "buyer@example.com"
       assert order.quantity == 2
       assert order.status == "confirmed"
+      assert order.charge_id != nil
       assert Decimal.equal?(order.total_amount, Decimal.mult(event.ticket_price, 2))
 
       # Verify tickets were decremented
       updated_event = Events.get_event(event.id)
       assert updated_event.available_tickets == 8
+
+      # Verify payment was processed
+      charges = Gateway.Mock.get_charges()
+      assert length(charges) >= 1
     end
 
     test "enqueues confirmation email" do
@@ -54,6 +60,13 @@ defmodule EventManagment.TicketingTest do
       event = insert(:event, %{status: "draft"})
       attrs = %{customer_email: "buyer@example.com", customer_name: "John", quantity: 1}
       assert {:error, :event_not_available} = Ticketing.purchase_tickets(event.id, attrs)
+    end
+
+    test "returns error for past events" do
+      past_date = DateTime.utc_now() |> DateTime.add(-3600, :second) |> DateTime.truncate(:second)
+      event = insert(:event, %{status: "published", date: past_date})
+      attrs = %{customer_email: "buyer@example.com", customer_name: "John", quantity: 1}
+      assert {:error, :event_ended} = Ticketing.purchase_tickets(event.id, attrs)
     end
 
     test "returns error when insufficient tickets" do
@@ -90,6 +103,26 @@ defmodule EventManagment.TicketingTest do
       # Tickets only decremented once
       updated_event = Events.get_event(event.id)
       assert updated_event.available_tickets == 8
+    end
+
+    test "rolls back when payment fails" do
+      event = insert(:published_event, %{available_tickets: 10})
+
+      Gateway.Mock.set_failure_mode(:card_declined)
+
+      attrs = %{
+        customer_email: "buyer@example.com",
+        customer_name: "John Doe",
+        quantity: 2
+      }
+
+      assert {:error, {:payment_failed, _reason}} = Ticketing.purchase_tickets(event.id, attrs)
+
+      # Tickets should not have been decremented
+      updated_event = Events.get_event(event.id)
+      assert updated_event.available_tickets == 10
+
+      Gateway.Mock.set_failure_mode(nil)
     end
 
     test "handles concurrent purchases safely" do
@@ -184,7 +217,63 @@ defmodule EventManagment.TicketingTest do
 
     test "returns error for non-confirmed orders" do
       order = insert(:order, %{status: "cancelled"})
-      assert {:error, _message} = Ticketing.cancel_order(order)
+      assert {:error, :invalid_order_status} = Ticketing.cancel_order(order)
+    end
+
+    test "processes refund when order has charge_id" do
+      event = insert(:published_event, %{available_tickets: 8})
+      order = insert(:order, %{event: event, quantity: 2, status: "confirmed", charge_id: "ch_test_123"})
+
+      assert {:ok, _cancelled} = Ticketing.cancel_order(order)
+
+      refunds = Gateway.Mock.get_refunds()
+      assert length(refunds) >= 1
+      assert hd(refunds).charge_id == "ch_test_123"
+    end
+
+    test "rolls back when refund fails" do
+      event = insert(:published_event, %{available_tickets: 8})
+      order = insert(:order, %{event: event, quantity: 2, status: "confirmed", charge_id: "ch_test_456"})
+
+      Gateway.Mock.set_failure_mode(:timeout)
+
+      assert {:error, {:refund_failed, :timeout}} = Ticketing.cancel_order(order)
+
+      # Tickets should NOT be returned
+      updated_event = Events.get_event(event.id)
+      assert updated_event.available_tickets == 8
+
+      # Order should still be confirmed
+      assert Ticketing.get_order(order.id).status == "confirmed"
+
+      Gateway.Mock.set_failure_mode(nil)
+    end
+
+    test "handles concurrent cancellation safely" do
+      event = insert(:published_event, %{available_tickets: 8})
+      order = insert(:order, %{event: event, quantity: 2, status: "confirmed"})
+
+      tasks =
+        for _ <- 1..3 do
+          Task.async(fn ->
+            # Re-fetch the order to get fresh data
+            fresh_order = Ticketing.get_order(order.id)
+            Ticketing.cancel_order(fresh_order)
+          end)
+        end
+
+      results = Task.await_many(tasks)
+
+      # Only one should succeed
+      successes = Enum.count(results, fn result -> match?({:ok, _}, result) end)
+      failures = Enum.count(results, fn result -> match?({:error, _}, result) end)
+
+      assert successes == 1
+      assert failures == 2
+
+      # Tickets should be returned exactly once
+      updated_event = Events.get_event(event.id)
+      assert updated_event.available_tickets == 10
     end
   end
 end

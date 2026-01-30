@@ -30,7 +30,7 @@ defmodule EventManagment.Workers.OrderConfirmationEmailTest do
       EmailService.Mock.set_failure_mode(:timeout)
 
       result = perform_job(OrderConfirmationEmail, %{order_id: order.id})
-      assert {:error, "Email service timeout"} = result
+      assert {:error, :timeout} = result
 
       # Reset failure mode
       EmailService.Mock.set_failure_mode(nil)
@@ -60,6 +60,30 @@ defmodule EventManagment.Workers.OrderConfirmationEmailTest do
       assert OrderConfirmationEmail.backoff(%Oban.Job{attempt: 2}) == 20
       # Third attempt: 2^3 * 5 = 40 seconds
       assert OrderConfirmationEmail.backoff(%Oban.Job{attempt: 3}) == 40
+    end
+  end
+
+  describe "retry exhaustion" do
+    test "job is discarded after max attempts with persistent failure" do
+      order = insert(:order)
+
+      EmailService.Mock.set_failure_mode(:server_error)
+
+      # Simulate multiple failed attempts - job should return error each time
+      for attempt <- 1..5 do
+        job = %Oban.Job{args: %{"order_id" => order.id}, attempt: attempt}
+        result = OrderConfirmationEmail.perform(job)
+        assert {:error, :server_error} = result
+      end
+
+      # After 5 failures, Oban would discard the job (max_attempts: 5)
+      # We verify the worker returns error consistently
+      EmailService.Mock.set_failure_mode(nil)
+    end
+
+    test "job has max_attempts of 5" do
+      changeset = OrderConfirmationEmail.new(%{order_id: Ecto.UUID.generate()})
+      assert changeset.changes.max_attempts == 5
     end
   end
 end

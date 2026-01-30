@@ -89,6 +89,17 @@ defmodule EventManagmentWeb.OrderControllerTest do
       assert response["errors"]["detail"] == "Not enough tickets available"
     end
 
+    test "returns 422 for past events", %{conn: conn} do
+      past_date = DateTime.utc_now() |> DateTime.add(-3600, :second) |> DateTime.truncate(:second)
+      event = insert(:event, %{status: "published", date: past_date})
+
+      attrs = order_attrs()
+      conn = post(conn, ~p"/api/events/#{event.id}/purchase", order: attrs)
+      response = json_response(conn, 422)
+
+      assert response["errors"]["detail"] == "Event has already ended"
+    end
+
     test "returns validation errors for invalid data", %{conn: conn} do
       event = insert(:published_event)
 

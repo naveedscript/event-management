@@ -12,6 +12,7 @@ defmodule EventManagment.Repo.Migrations.CreateOrders do
       add :status, :string, null: false, default: "pending"
       add :idempotency_key, :string
       add :confirmed_at, :utc_datetime
+      add :charge_id, :string
 
       add :event_id, references(:events, type: :binary_id, on_delete: :restrict), null: false
 

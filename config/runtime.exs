@@ -91,4 +91,12 @@ if config_env() == :prod do
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
   config :event_managment, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
+
+  # Stripe configuration
+  stripe_secret_key =
+    System.get_env("STRIPE_SECRET_KEY") ||
+      raise "environment variable STRIPE_SECRET_KEY is missing"
+
+  config :stripity_stripe, api_key: stripe_secret_key
+  config :event_managment, :payment_gateway, EventManagment.Payments.Gateway.Stripe
 end

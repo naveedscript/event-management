@@ -44,7 +44,8 @@ defmodule EventManagment.MixProject do
       {:oban, "~> 2.19"},
       {:swoosh, "~> 1.17"},
       {:finch, "~> 0.19"},
-      {:hammer, "~> 7.0"}
+      {:hammer, "~> 7.0"},
+      {:stripity_stripe, "~> 3.2"}
     ]
   end
 

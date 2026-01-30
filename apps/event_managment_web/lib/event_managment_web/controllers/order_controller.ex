@@ -1,42 +1,10 @@
 defmodule EventManagmentWeb.OrderController do
-  @moduledoc """
-  Handles HTTP requests for order and ticket management.
-
-  ## Endpoints
-
-  - `GET /api/orders` - List orders with optional filters
-  - `GET /api/orders/:id` - Get order details
-  - `POST /api/events/:event_id/purchase` - Purchase tickets for an event
-  - `POST /api/orders/:id/cancel` - Cancel an order
-
-  ## Purchase Endpoint
-
-  The purchase endpoint supports idempotency via the `idempotency_key` parameter.
-  If the same key is used for multiple requests, only the first will be processed.
-  Subsequent requests return the existing order.
-
-  ## Rate Limiting
-
-  The purchase endpoint has stricter rate limits (10 requests/minute)
-  compared to other endpoints (100 requests/minute).
-  """
   use EventManagmentWeb, :controller
 
   alias EventManagment.Ticketing
 
   action_fallback EventManagmentWeb.FallbackController
 
-  @doc """
-  Lists orders with optional filtering and pagination.
-
-  ## Query Parameters
-
-  - `customer_email` - Filter by customer email
-  - `event_id` - Filter by event UUID
-  - `status` - Filter by status: pending, confirmed, cancelled, refunded
-  - `limit` - Maximum results (default: 50, max: 100)
-  - `offset` - Skip N results for pagination
-  """
   def index(conn, params) do
     opts = [
       customer_email: params["customer_email"],
@@ -54,9 +22,6 @@ defmodule EventManagmentWeb.OrderController do
     |> render(:index, orders: orders)
   end
 
-  @doc """
-  Gets a single order by ID.
-  """
   def show(conn, %{"id" => id}) do
     case Ticketing.get_order(id) do
       nil -> {:error, :not_found}
@@ -64,29 +29,6 @@ defmodule EventManagmentWeb.OrderController do
     end
   end
 
-  @doc """
-  Purchases tickets for an event.
-
-  ## Request Body
-
-  ```json
-  {
-    "order": {
-      "customer_email": "john@example.com",
-      "customer_name": "John Doe",
-      "quantity": 2,
-      "idempotency_key": "optional-unique-key"
-    }
-  }
-  ```
-
-  ## Response Codes
-
-  - 201 Created - Order successfully created
-  - 404 Not Found - Event doesn't exist
-  - 422 Unprocessable Entity - Validation error or business rule violation
-  - 429 Too Many Requests - Rate limit exceeded
-  """
   def purchase(conn, %{"event_id" => event_id, "order" => order_params}) do
     attrs = %{
       customer_email: order_params["customer_email"],
@@ -108,25 +50,23 @@ defmodule EventManagmentWeb.OrderController do
       {:error, :event_not_available} ->
         {:error, :unprocessable_entity, "Event is not available for purchase"}
 
+      {:error, :event_ended} ->
+        {:error, :unprocessable_entity, "Event has already ended"}
+
       {:error, :insufficient_tickets} ->
         {:error, :unprocessable_entity, "Not enough tickets available"}
+
+      {:error, {:payment_failed, _reason}} ->
+        {:error, :unprocessable_entity, "Payment failed"}
+
+      {:error, {:email_enqueue_failed, _reason}} ->
+        {:error, :unprocessable_entity, "Failed to process order"}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:error, changeset}
     end
   end
 
-  @doc """
-  Cancels an order and returns tickets to inventory.
-
-  Only confirmed orders can be cancelled.
-
-  ## Response Codes
-
-  - 200 OK - Order successfully cancelled
-  - 404 Not Found - Order doesn't exist
-  - 422 Unprocessable Entity - Order cannot be cancelled (wrong status)
-  """
   def cancel(conn, %{"id" => id}) do
     case Ticketing.get_order(id) do
       nil ->

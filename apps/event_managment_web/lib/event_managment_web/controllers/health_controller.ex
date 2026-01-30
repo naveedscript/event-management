@@ -1,35 +1,8 @@
 defmodule EventManagmentWeb.HealthController do
-  @moduledoc """
-  Health check endpoint for monitoring and load balancer probes.
-
-  Returns system health status including:
-  - Database connectivity
-  - Oban job queue status
-  - System timestamp
-  """
   use EventManagmentWeb, :controller
 
   alias EventManagment.Repo
 
-  @doc """
-  Performs health checks and returns system status.
-
-  ## Response Codes
-  - 200 OK - All systems operational
-  - 503 Service Unavailable - One or more systems unhealthy
-
-  ## Response Body
-  ```json
-  {
-    "status": "ok" | "degraded" | "unhealthy",
-    "timestamp": "2024-01-01T00:00:00Z",
-    "checks": {
-      "database": "ok" | "error",
-      "oban": "ok" | "error"
-    }
-  }
-  ```
-  """
   def check(conn, _params) do
     checks = %{
       database: check_database(),

@@ -1,42 +1,54 @@
 defmodule EventManagment.Payments.Gateway.Stripe do
-  @moduledoc """
-  Stripe payment gateway implementation.
-
-  In a real implementation, this would use the Stripity Stripe library
-  to communicate with the Stripe API.
-  """
   @behaviour EventManagment.Payments.Gateway
 
   require Logger
 
   @impl true
   def charge(payment_intent) do
-    # In production, this would call the Stripe API
-    # For now, we simulate a successful charge
-    Logger.info("Processing Stripe charge: #{inspect(payment_intent)}")
+    amount_cents = payment_intent.amount |> Decimal.mult(100) |> Decimal.to_integer()
 
-    {:ok,
-     %{
-       id: "ch_#{generate_id()}",
-       status: "succeeded",
-       amount: payment_intent.amount,
-       currency: payment_intent[:currency] || "usd"
-     }}
+    params = %{
+      amount: amount_cents,
+      currency: payment_intent[:currency] || "usd",
+      description: payment_intent[:description],
+      receipt_email: payment_intent[:customer_email],
+      metadata: %{
+        idempotency_key: payment_intent[:idempotency_key]
+      }
+    }
+
+    opts = build_opts(payment_intent[:idempotency_key])
+
+    case Stripe.Charge.create(params, opts) do
+      {:ok, %Stripe.Charge{id: id, status: status}} ->
+        {:ok, %{id: id, status: status}}
+
+      {:error, %Stripe.Error{message: message, code: code}} ->
+        Logger.error("Stripe charge failed: #{code} - #{message}")
+        {:error, %{code: code, message: message}}
+
+      {:error, error} ->
+        Logger.error("Stripe charge failed: #{inspect(error)}")
+        {:error, error}
+    end
   end
 
   @impl true
   def refund(charge_id) do
-    Logger.info("Processing Stripe refund for charge: #{charge_id}")
+    case Stripe.Refund.create(%{charge: charge_id}) do
+      {:ok, %Stripe.Refund{id: id, status: status}} ->
+        {:ok, %{id: id, charge_id: charge_id, status: status}}
 
-    {:ok,
-     %{
-       id: "re_#{generate_id()}",
-       charge_id: charge_id,
-       status: "succeeded"
-     }}
+      {:error, %Stripe.Error{message: message, code: code}} ->
+        Logger.error("Stripe refund failed: #{code} - #{message}")
+        {:error, %{code: code, message: message}}
+
+      {:error, error} ->
+        Logger.error("Stripe refund failed: #{inspect(error)}")
+        {:error, error}
+    end
   end
 
-  defp generate_id do
-    :crypto.strong_rand_bytes(12) |> Base.encode16(case: :lower)
-  end
+  defp build_opts(nil), do: []
+  defp build_opts(idempotency_key), do: [idempotency_key: idempotency_key]
 end

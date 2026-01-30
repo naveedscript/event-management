@@ -1,23 +1,4 @@
 defmodule EventManagmentWeb.EventController do
-  @moduledoc """
-  Handles HTTP requests for event management.
-
-  ## Endpoints
-
-  - `GET /api/events` - List events with optional filters
-  - `GET /api/events/:id` - Get event details
-  - `POST /api/events` - Create new event
-  - `PUT /api/events/:id` - Update event
-  - `DELETE /api/events/:id` - Delete event
-  - `POST /api/events/:id/publish` - Publish a draft event
-
-  ## Query Parameters (GET /api/events)
-
-  - `status` - Filter by status: draft, published, completed, cancelled
-  - `upcoming` - Set to "true" to only show future events
-  - `limit` - Maximum results (default: 50, max: 100)
-  - `offset` - Skip N results for pagination
-  """
   use EventManagmentWeb, :controller
 
   alias EventManagment.Events
@@ -25,9 +6,6 @@ defmodule EventManagmentWeb.EventController do
 
   action_fallback EventManagmentWeb.FallbackController
 
-  @doc """
-  Lists events with optional filtering and pagination.
-  """
   def index(conn, params) do
     opts = [
       status: params["status"],
@@ -44,9 +22,6 @@ defmodule EventManagmentWeb.EventController do
     |> render(:index, events: events)
   end
 
-  @doc """
-  Gets a single event by ID.
-  """
   def show(conn, %{"id" => id}) do
     case Events.get_event(id) do
       nil -> {:error, :not_found}
@@ -54,12 +29,6 @@ defmodule EventManagmentWeb.EventController do
     end
   end
 
-  @doc """
-  Creates a new event.
-
-  Events are created in "draft" status and must be published
-  before tickets can be purchased.
-  """
   def create(conn, %{"event" => event_params}) do
     with {:ok, %Event{} = event} <- Events.create_event(event_params) do
       conn
@@ -69,9 +38,6 @@ defmodule EventManagmentWeb.EventController do
     end
   end
 
-  @doc """
-  Updates an existing event.
-  """
   def update(conn, %{"id" => id, "event" => event_params}) do
     case Events.get_event(id) do
       nil ->
@@ -84,11 +50,6 @@ defmodule EventManagmentWeb.EventController do
     end
   end
 
-  @doc """
-  Deletes an event.
-
-  Note: Events with orders cannot be deleted.
-  """
   def delete(conn, %{"id" => id}) do
     case Events.get_event(id) do
       nil ->
@@ -101,9 +62,6 @@ defmodule EventManagmentWeb.EventController do
     end
   end
 
-  @doc """
-  Publishes a draft event, making it available for ticket purchases.
-  """
   def publish(conn, %{"event_id" => id}) do
     case Events.get_event(id) do
       nil ->

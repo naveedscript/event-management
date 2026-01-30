@@ -1,34 +1,4 @@
 defmodule EventManagmentWeb.Plugs.RateLimiter do
-  @moduledoc """
-  Rate limiting plug using Hammer.
-
-  Limits requests per IP address to prevent abuse.
-
-  ## Configuration
-
-  Configure in `config/config.exs`:
-
-      config :event_managment_web, EventManagmentWeb.Plugs.RateLimiter,
-        general_limit: 100,        # requests per window
-        general_scale_ms: 60_000,  # 1 minute
-        purchase_limit: 10,
-        purchase_scale_ms: 60_000
-
-  ## Default Limits
-
-  - General API endpoints: 100 requests per minute
-  - Purchase endpoints: 10 requests per minute
-
-  ## Response Headers
-
-  When rate limited, returns:
-  - `429 Too Many Requests` status code
-  - `Retry-After` header with seconds until reset
-
-  ## Bypass
-
-  Rate limiting is disabled when `:env` is set to `:test` in config.
-  """
   import Plug.Conn
 
   alias EventManagment.RateLimiter
@@ -74,11 +44,7 @@ defmodule EventManagmentWeb.Plugs.RateLimiter do
   end
 
   defp rate_limit_key(conn, ip) do
-    if purchase_endpoint?(conn) do
-      "api:purchase:#{ip}"
-    else
-      "api:general:#{ip}"
-    end
+    if purchase_endpoint?(conn), do: "api:purchase:#{ip}", else: "api:general:#{ip}"
   end
 
   defp get_limits(conn) do
@@ -95,24 +61,15 @@ defmodule EventManagmentWeb.Plugs.RateLimiter do
     end
   end
 
-  defp purchase_endpoint?(conn) do
-    # Match routes that end with /purchase
-    conn.request_path =~ ~r"/purchase$"
-  end
+  defp purchase_endpoint?(conn), do: conn.request_path =~ ~r"/purchase$"
 
   defp get_client_ip(conn) do
-    # Check X-Forwarded-For header first (for load balancer scenarios)
     case get_req_header(conn, "x-forwarded-for") do
       [forwarded | _] ->
-        forwarded
-        |> String.split(",")
-        |> hd()
-        |> String.trim()
+        forwarded |> String.split(",") |> hd() |> String.trim()
 
       [] ->
-        conn.remote_ip
-        |> :inet.ntoa()
-        |> to_string()
+        conn.remote_ip |> :inet.ntoa() |> to_string()
     end
   end
 end
