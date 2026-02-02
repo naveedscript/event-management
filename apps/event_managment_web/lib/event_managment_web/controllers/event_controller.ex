@@ -1,4 +1,7 @@
 defmodule EventManagmentWeb.EventController do
+  @moduledoc """
+  Handles event CRUD operations and publishing.
+  """
   use EventManagmentWeb, :controller
 
   alias EventManagment.Events

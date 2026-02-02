@@ -1,6 +1,23 @@
 defmodule EventManagment.Events.Event do
+  @moduledoc """
+  Schema for events with ticket inventory management.
+  """
   use Ecto.Schema
   import Ecto.Changeset
+
+  @type t :: %__MODULE__{
+          id: Ecto.UUID.t() | nil,
+          name: String.t() | nil,
+          description: String.t() | nil,
+          venue: String.t() | nil,
+          date: DateTime.t() | nil,
+          ticket_price: Decimal.t() | nil,
+          total_tickets: non_neg_integer() | nil,
+          available_tickets: non_neg_integer() | nil,
+          status: String.t(),
+          inserted_at: DateTime.t() | nil,
+          updated_at: DateTime.t() | nil
+        }
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -25,6 +42,8 @@ defmodule EventManagment.Events.Event do
   @required_fields ~w(name venue date ticket_price total_tickets)a
   @optional_fields ~w(description status available_tickets)a
 
+  @doc "Creates a changeset for inserting a new event."
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(event, attrs) do
     event
     |> cast(attrs, @required_fields ++ @optional_fields)
@@ -38,6 +57,8 @@ defmodule EventManagment.Events.Event do
     |> set_available_tickets()
   end
 
+  @doc "Creates a changeset for updating an existing event."
+  @spec update_changeset(t(), map()) :: Ecto.Changeset.t()
   def update_changeset(event, attrs) do
     event
     |> cast(attrs, @required_fields ++ @optional_fields)
@@ -48,6 +69,8 @@ defmodule EventManagment.Events.Event do
     |> validate_inclusion(:status, @statuses)
   end
 
+  @doc "Creates a changeset for transitioning event status."
+  @spec status_changeset(t(), String.t()) :: Ecto.Changeset.t()
   def status_changeset(event, status) do
     event
     |> cast(%{status: status}, [:status])
@@ -71,5 +94,7 @@ defmodule EventManagment.Events.Event do
     end
   end
 
+  @doc "Returns valid status values."
+  @spec statuses() :: [String.t()]
   def statuses, do: @statuses
 end

@@ -1,4 +1,9 @@
 defmodule EventManagment.Workers.EventCompletionJob do
+  @moduledoc """
+  Oban cron worker that marks past events as completed.
+
+  Runs daily at midnight UTC to transition published events whose date has passed.
+  """
   use Oban.Worker, queue: :scheduled, max_attempts: 3
 
   alias EventManagment.Events

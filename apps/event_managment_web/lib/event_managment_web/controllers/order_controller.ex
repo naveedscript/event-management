@@ -1,4 +1,7 @@
 defmodule EventManagmentWeb.OrderController do
+  @moduledoc """
+  Handles ticket purchases, order listing, and cancellations.
+  """
   use EventManagmentWeb, :controller
 
   alias EventManagment.Ticketing

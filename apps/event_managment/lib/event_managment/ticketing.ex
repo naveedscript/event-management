@@ -1,4 +1,7 @@
 defmodule EventManagment.Ticketing do
+  @moduledoc """
+  Context for ticket purchases and order management.
+  """
   import Ecto.Query, warn: false
 
   alias EventManagment.Repo
@@ -10,6 +13,16 @@ defmodule EventManagment.Ticketing do
   @default_limit 50
   @max_limit 100
 
+  @doc """
+  Purchases tickets for an event. Supports idempotency via `idempotency_key`.
+
+  Returns existing order if idempotency key was already used.
+  """
+  @spec purchase_tickets(Ecto.UUID.t(), map()) ::
+          {:ok, Order.t()}
+          | {:error, :event_not_found | :event_not_available | :event_ended | :insufficient_tickets}
+          | {:error, {:payment_failed, term()} | {:email_enqueue_failed, term()}}
+          | {:error, Ecto.Changeset.t()}
   def purchase_tickets(event_id, attrs) do
     case check_idempotency(attrs[:idempotency_key]) do
       {:ok, existing_order} -> {:ok, existing_order}
@@ -102,16 +115,22 @@ defmodule EventManagment.Ticketing do
     end
   end
 
+  @doc "Gets a single order by ID with event preloaded."
+  @spec get_order(Ecto.UUID.t()) :: Order.t() | nil
   def get_order(id) do
     query = from o in Order, where: o.id == ^id, preload: [:event]
     Repo.one(query)
   end
 
+  @doc "Gets a single order by ID. Raises if not found."
+  @spec get_order!(Ecto.UUID.t()) :: Order.t()
   def get_order!(id) do
     query = from o in Order, where: o.id == ^id, preload: [:event]
     Repo.one!(query)
   end
 
+  @doc "Lists orders with optional filtering by customer_email, event_id, status."
+  @spec list_orders(keyword()) :: [Order.t()]
   def list_orders(opts \\ []) do
     limit = min(opts[:limit] || @default_limit, @max_limit)
     offset = opts[:offset] || 0
@@ -127,6 +146,8 @@ defmodule EventManagment.Ticketing do
     |> Repo.all()
   end
 
+  @doc "Counts orders matching the given filters."
+  @spec count_orders(keyword()) :: non_neg_integer()
   def count_orders(opts \\ []) do
     Order
     |> filter_by_customer_email(opts[:customer_email])
@@ -144,9 +165,16 @@ defmodule EventManagment.Ticketing do
   defp filter_by_order_status(query, nil), do: query
   defp filter_by_order_status(query, status), do: where(query, [o], o.status == ^status)
 
+  @doc """
+  Cancels an order and refunds payment.
+
+  Uses row-level locking to prevent concurrent cancellations.
+  """
+  @spec cancel_order(Order.t()) ::
+          {:ok, Order.t()}
+          | {:error, :invalid_order_status | :order_not_found | {:refund_failed, term()}}
   def cancel_order(%Order{id: order_id}) do
     Repo.transaction(fn ->
-      # Lock the order row and re-check status to handle concurrent cancellations
       query = from o in Order, where: o.id == ^order_id, lock: "FOR UPDATE"
 
       case Repo.one(query) do
@@ -183,6 +211,12 @@ defmodule EventManagment.Ticketing do
     |> Repo.update()
   end
 
+  @doc "Returns order statistics for an event."
+  @spec get_order_stats(Ecto.UUID.t()) :: %{
+          total_orders: non_neg_integer(),
+          total_tickets: non_neg_integer() | nil,
+          total_revenue: Decimal.t() | nil
+        }
   def get_order_stats(event_id) do
     query =
       from o in Order,

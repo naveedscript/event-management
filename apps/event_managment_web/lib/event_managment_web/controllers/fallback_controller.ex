@@ -1,4 +1,7 @@
 defmodule EventManagmentWeb.FallbackController do
+  @moduledoc """
+  Handles error responses for controller actions.
+  """
   use EventManagmentWeb, :controller
 
   def call(conn, {:error, :not_found}) do

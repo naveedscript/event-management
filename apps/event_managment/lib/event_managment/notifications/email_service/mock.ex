@@ -1,8 +1,12 @@
 defmodule EventManagment.Notifications.EmailService.Mock do
+  @moduledoc """
+  Test implementation of EmailService. Stores emails in memory for assertions.
+  """
   @behaviour EventManagment.Notifications.EmailService
 
   use Agent
 
+  @spec start_link(keyword()) :: Agent.on_start()
   def start_link(_opts \\ []) do
     Agent.start_link(fn -> %{emails: [], failure_mode: nil} end, name: __MODULE__)
   end
@@ -14,16 +18,22 @@ defmodule EventManagment.Notifications.EmailService.Mock do
     end
   end
 
+  @doc "Sets failure mode: :timeout, :server_error, or nil for success."
+  @spec set_failure_mode(atom() | nil) :: :ok
   def set_failure_mode(mode) do
     ensure_started()
     Agent.update(__MODULE__, fn state -> %{state | failure_mode: mode} end)
   end
 
+  @doc "Returns all sent emails for test assertions."
+  @spec get_sent_emails() :: [map()]
   def get_sent_emails do
     ensure_started()
     Agent.get(__MODULE__, fn state -> state.emails end)
   end
 
+  @doc "Clears stored emails and resets failure mode."
+  @spec clear() :: :ok
   def clear do
     ensure_started()
     Agent.update(__MODULE__, fn state -> %{state | emails: [], failure_mode: nil} end)

@@ -1,4 +1,9 @@
 defmodule EventManagment.Workers.OrderConfirmationEmail do
+  @moduledoc """
+  Oban worker that sends order confirmation emails.
+
+  Retries up to 5 times with exponential backoff on failure.
+  """
   use Oban.Worker, queue: :emails, max_attempts: 5
 
   alias EventManagment.Notifications
@@ -28,6 +33,7 @@ defmodule EventManagment.Workers.OrderConfirmationEmail do
     end
   end
 
+  @doc "Exponential backoff: 10s, 20s, 40s, 80s, 160s"
   @impl Oban.Worker
   def backoff(%Oban.Job{attempt: attempt}) do
     trunc(:math.pow(2, attempt) * 5)

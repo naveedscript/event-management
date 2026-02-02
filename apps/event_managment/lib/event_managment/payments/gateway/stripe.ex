@@ -1,4 +1,7 @@
 defmodule EventManagment.Payments.Gateway.Stripe do
+  @moduledoc """
+  Stripe implementation of payment gateway using stripity_stripe.
+  """
   @behaviour EventManagment.Payments.Gateway
 
   require Logger

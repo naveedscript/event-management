@@ -1,8 +1,12 @@
 defmodule EventManagment.Payments.Gateway.Mock do
+  @moduledoc """
+  Test implementation of payment gateway. Stores charges/refunds in memory.
+  """
   @behaviour EventManagment.Payments.Gateway
 
   use Agent
 
+  @spec start_link(keyword()) :: Agent.on_start()
   def start_link(_opts \\ []) do
     Agent.start_link(fn -> %{charges: [], refunds: [], failure_mode: nil} end, name: __MODULE__)
   end
@@ -14,21 +18,29 @@ defmodule EventManagment.Payments.Gateway.Mock do
     end
   end
 
+  @doc "Sets failure mode: :card_declined, :insufficient_funds, :timeout, or nil."
+  @spec set_failure_mode(atom() | nil) :: :ok
   def set_failure_mode(mode) do
     ensure_started()
     Agent.update(__MODULE__, fn state -> %{state | failure_mode: mode} end)
   end
 
+  @doc "Returns all charges for test assertions."
+  @spec get_charges() :: [map()]
   def get_charges do
     ensure_started()
     Agent.get(__MODULE__, fn state -> state.charges end)
   end
 
+  @doc "Returns all refunds for test assertions."
+  @spec get_refunds() :: [map()]
   def get_refunds do
     ensure_started()
     Agent.get(__MODULE__, fn state -> state.refunds end)
   end
 
+  @doc "Clears stored data and resets failure mode."
+  @spec clear() :: :ok
   def clear do
     ensure_started()
     Agent.update(__MODULE__, fn state ->
